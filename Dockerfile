@@ -19,4 +19,5 @@ ENV PYTHONPATH=/app
 EXPOSE 7860
 
 # Change to the backend directory and run gunicorn
-CMD cd backend && gunicorn "backend:create_app()" --bind 0.0.0.0:7860
+# Run the application using run.py
+CMD ["python", "backend/run.py"]
