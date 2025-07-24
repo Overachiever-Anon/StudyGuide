@@ -3,7 +3,8 @@ import jwt
 import os
 from flask import request, jsonify, current_app
 
-def jwt_required(f):
+# The function name is now 'login_required' to match what other files are importing.
+def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         # Development bypass - always provide a dummy user when in development mode
@@ -19,7 +20,8 @@ def jwt_required(f):
                     self.role = 'admin'
             
             # Return the function with a dummy user
-            return f(DummyUser(), *args, **kwargs)
+            # IMPORTANT: The route must accept 'current_user' as a keyword argument
+            return f(current_user=DummyUser(), *args, **kwargs)
         
         # Normal JWT validation for production
         from ..models import User  # Defer import to fix circular dependency
@@ -44,6 +46,6 @@ def jwt_required(f):
         except Exception as e:
             return jsonify({'message': f'An error occurred: {str(e)}'}), 500
 
-        return f(current_user, *args, **kwargs)
+        return f(current_user=current_user, *args, **kwargs)
 
     return decorated
