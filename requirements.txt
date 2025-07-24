@@ -1,0 +1,9 @@
+Flask
+Flask-SQLAlchemy
+pdfplumber
+python-dotenv
+Flask-Cors
+PyJWT
+Flask-Bcrypt
+PyMuPDF
+openai
