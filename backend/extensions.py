@@ -9,6 +9,7 @@ and issues with the application context.
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_migrate import Migrate
+from flask_jwt_extended import JWTManager
 import os
 from supabase import create_client
 
@@ -16,6 +17,7 @@ from supabase import create_client
 db = SQLAlchemy()
 bcrypt = Bcrypt()
 migrate = Migrate()
+jwt = JWTManager()
 
 def init_supabase():
     """Initialize the Supabase client for storage operations."""

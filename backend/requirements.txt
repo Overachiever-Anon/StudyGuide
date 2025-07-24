@@ -1,38 +1,24 @@
+# Flask Core and Extensions
 Flask==2.3.2
 Flask-Cors==4.0.0
 Flask-SQLAlchemy==3.0.5
 Flask-Bcrypt==1.0.1
+Flask-JWT-Extended==4.5.2
+Flask-Migrate==4.0.5
+
+# Web Server
+gunicorn==20.1.0
+
+# Database
 psycopg2-binary==2.9.6
-PyJWT==2.7.0
+
+# Environment & Utilities
 python-dotenv==1.0.0
-PyMuPDF==1.23.3
 
-# AI and Processing Libraries
-anthropic==0.25.1
-openai==1.12.0
-langchain==0.1.10
-langchain-community==0.0.25
-langchain-openai==0.0.8
-langchain-anthropic==0.1.4
-
-# PDF and Text Processing
-pdfplumber==0.10.3
+# PDF Processing
 PyPDF2==3.0.1
 
-# Storage
+# AI & API Libraries
+anthropic==0.25.1
 supabase==1.0.3
-python-magic==0.4.27
-
-# Background Job Processing (Optional)
-# celery==5.3.4
-# redis==5.0.1
-
-# Additional Utilities
 requests==2.31.0
-numpy==1.24.3
-pandas==2.0.3
-jinja2==3.1.2
-
-# Deployment
-gunicorn==20.1.0
-Flask-Migrate==4.0.5

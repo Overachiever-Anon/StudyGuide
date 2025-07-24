@@ -2,6 +2,7 @@ import os
 import sys
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
+from flask_jwt_extended import JWTManager
 from dotenv import load_dotenv
 
 def create_app():
@@ -21,6 +22,7 @@ def create_app():
     
     # --- App Configuration ---
     app.config['SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY')
+    app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY')  # For Flask-JWT-Extended
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -36,10 +38,11 @@ def create_app():
     CORS(app, supports_credentials=True)
 
     # --- Initialize Extensions ---
-    from .extensions import db, bcrypt, migrate, init_supabase
+    from .extensions import db, bcrypt, migrate, init_supabase, jwt
     db.init_app(app)
     bcrypt.init_app(app)
     migrate.init_app(app, db) # For database migrations
+    jwt.init_app(app) # For JWT authentication
     init_supabase() # For Supabase file storage
 
     # --- Register Blueprints ---

@@ -1,26 +1,24 @@
-import datetime
-import jwt
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import create_access_token
 from ..extensions import db, bcrypt
+from ..models import User
 
-auth_bp = Blueprint('auth_bp', __name__)
+auth_bp = Blueprint('auth_bp', __name__, url_prefix='/api/auth')
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
-    from ..models import User  # Defer import to prevent circular dependency
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
-    email = data.get('email')
 
-    if not username or not password or not email:
-        return jsonify({'error': 'Username, email, and password are required'}), 400
+    if not username or not password:
+        return jsonify({'error': 'Username and password are required'}), 400
 
-    if User.query.filter_by(username=username).first() or User.query.filter_by(email=email).first():
-        return jsonify({'error': 'Username or email already exists'}), 409
+    if User.query.filter_by(username=username).first():
+        return jsonify({'error': 'Username already exists'}), 409
 
     hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-    new_user = User(username=username, email=email, password_hash=hashed_password)
+    new_user = User(username=username, password=hashed_password)
     
     try:
         db.session.add(new_user)
@@ -32,24 +30,18 @@ def register():
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
-    from ..models import User  # Defer import
     data = request.get_json()
-    email = data.get('email')
+    username = data.get('username')
     password = data.get('password')
 
-    if not email or not password:
-        return jsonify({'error': 'Email and password are required'}), 400
+    if not username or not password:
+        return jsonify({'error': 'Username and password are required'}), 400
 
-    user = User.query.filter_by(email=email).first()
+    user = User.query.filter_by(username=username).first()
 
-    if user and bcrypt.check_password_hash(user.password_hash, password):
-        try:
-            token = jwt.encode({
-                'user_id': user.id,
-                'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
-            }, current_app.config['SECRET_KEY'], algorithm='HS256')
-            return jsonify({'access_token': token})
-        except Exception as e:
-            return jsonify({'error': f'Token generation error: {str(e)}'}), 500
-
+    if user and bcrypt.check_password_hash(user.password, password):
+        # Create the JWT token with Flask-JWT-Extended
+        access_token = create_access_token(identity=user.id)
+        return jsonify(access_token=access_token)
+    
     return jsonify({'error': 'Invalid username or password'}), 401
