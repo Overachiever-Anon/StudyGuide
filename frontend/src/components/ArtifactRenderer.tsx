@@ -31,6 +31,9 @@ interface ArtifactRendererProps {
  * @returns A tuple containing the HTML string and a potential error message.
  */
 const createSandboxedHTML = (code: string): [string, string | null] => {
+  if (!code) {
+    return ['', 'Artefakt-Inhalt ist leer oder ungültig. Das Artefakt kann nicht gerendert werden.'];
+  }
   // Sanitize and clean the user-provided code
   const sanitizedCode = code.replace(/\u00A0/g, ' '); // Replace non-breaking spaces
   const baseCleanedCode = sanitizedCode
@@ -72,60 +75,37 @@ const createSandboxedHTML = (code: string): [string, string | null] => {
   }
   
   // Final cleanup of the 'default' keyword if it exists anywhere else
-  finalCleanedCode = finalCleanedCode.replace(/default/g, '');
 
   // An Error Boundary component to catch rendering errors within the sandboxed React tree.
   const errorBoundaryClass = `
     class ErrorBoundary extends React.Component {
       constructor(props) { super(props); this.state = { hasError: false, error: null }; }
       static getDerivedStateFromError(error) { return { hasError: true, error }; }
+      componentDidCatch(error, errorInfo) { window.parent.postMessage({ type: 'iframeError', error: { message: error.message, stack: errorInfo.componentStack } }, '*'); }
       render() {
-        if (this.state.hasError) {
-          return React.createElement('div', { style: { color: 'red', padding: '1rem', backgroundColor: '#260000', border: '1px solid red' } },
-            React.createElement('strong', null, 'Component Error:'),
-            React.createElement('pre', { style: { whiteSpace: 'pre-wrap' } }, this.state.error.toString())
-          );
-        }
+        if (this.state.hasError) { return null; }
         return this.props.children;
       }
     }
   `;
 
-  // The main script to be executed by Babel in the iframe.
   const script = `
     try {
-      // Make React hooks available in the scope
       const { useState, useEffect, useReducer, useCallback, useMemo, useRef, useContext } = React;
-      
       ${errorBoundaryClass}
-      
-      // The user's cleaned component code
       ${finalCleanedCode}
       
-      // Check if the component name we found exists and is a function.
-      // This will throw a ReferenceError if the component is not defined, which is caught below.
-      if (typeof ${componentName} !== 'function') {
-        throw new Error(\`Component '${componentName}' could not be found or is not a function. Please ensure it's a named function or a const assigned to a function/component.\`);
-      }
-      
+      const ComponentToRender = eval(${JSON.stringify(componentName)});
       const container = document.getElementById('root');
       const root = ReactDOM.createRoot(container);
-
-      // Render the component directly by its name, wrapped in our ErrorBoundary.
-      root.render(React.createElement(ErrorBoundary, null, React.createElement(${componentName})));
-
+      root.render(React.createElement(ErrorBoundary, null, React.createElement(ComponentToRender)));
+      
+      window.parent.postMessage({ type: 'iframeSuccess' }, '*');
     } catch (e) {
-      console.error('FATAL: Error rendering component in iframe:', e);
-      // Post error message back to the parent window for display
       window.parent.postMessage({ type: 'iframeError', error: { message: e.message, stack: e.stack } }, '*');
-      const container = document.getElementById('root');
-      if (container) {
-        container.innerHTML = '<div style="padding: 1rem; background-color: #370000; border: 1px solid #ef4444; color: #fca5a5;"><strong>Fatal Error:</strong><pre>' + e.message + '</pre></div>';
-      }
     }
   `;
 
-  // The final HTML document for the iframe's srcDoc
   return [`
     <html>
       <head>
@@ -135,20 +115,16 @@ const createSandboxedHTML = (code: string): [string, string | null] => {
         <script src="https://cdn.tailwindcss.com"></script>
         <style>body { margin: 0; background-color: transparent; color: #e2e8f0; font-family: sans-serif; }</style>
         <script>
-          // Global error handlers to catch and report issues from the iframe
-          window.addEventListener('error', e => { console.error('[iframe] Uncaught error:', e.error); window.parent.postMessage({ type: 'iframeError', error: { message: e.error.message, stack: e.error.stack } }, '*'); });
-          window.addEventListener('unhandledrejection', e => { console.error('[iframe] Unhandled rejection:', e.reason); window.parent.postMessage({ type: 'iframeError', error: { message: e.reason.message, stack: e.reason.stack } }, '*'); });
+          window.addEventListener('error', e => { window.parent.postMessage({ type: 'iframeError', error: { message: e.error.message, stack: e.error.stack } }, '*'); });
+          window.addEventListener('unhandledrejection', e => { window.parent.postMessage({ type: 'iframeError', error: { message: e.reason.message, stack: e.reason.stack } }, '*'); });
         </script>
       </head>
-      <body>
-        <div id="root"></div>
-        <script type="text/babel">${script}</script>
-      </body>
+      <body><div id="root"></div><script type="text/babel">${script}</script></body>
     </html>
   `, null];
 };
 
-const ArtifactRenderer: FC<ArtifactRendererProps> = ({ reactCode, title = 'Interactive Artifact', type = 'artifact', onError }) => {
+const ArtifactRenderer: FC<ArtifactRendererProps> = ({ reactCode, title = 'Artifact', type = 'Interactive', onError }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [srcDoc, setSrcDoc] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -156,8 +132,7 @@ const ArtifactRenderer: FC<ArtifactRendererProps> = ({ reactCode, title = 'Inter
   const [showCode, setShowCode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Generates the iframe HTML and sets it to the state.
-  const generateAndSetSrcDoc = () => {
+  useEffect(() => {
     setIsLoading(true);
     setError(null);
     const [htmlContent, errorMessage] = createSandboxedHTML(reactCode);
@@ -168,50 +143,44 @@ const ArtifactRenderer: FC<ArtifactRendererProps> = ({ reactCode, title = 'Inter
     } else {
       setSrcDoc(htmlContent);
     }
-  };
-
-  // Re-generate the iframe content whenever the source code changes.
-  useEffect(() => {
-    generateAndSetSrcDoc();
   }, [reactCode]);
 
-  // Listen for error messages posted from the iframe.
   useEffect(() => {
-    const handleIframeError = (event: MessageEvent) => {
-      // Basic security: check if the message is the type we expect.
-      if (event.data && event.data.type === 'iframeError') {
-        console.error('Error received from iframe:', event.data.error);
-        setError(event.data.error.message || 'An unknown error occurred in the artifact.');
+    const handleIframeMessage = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      
+      const { type, error: errorData } = event.data;
+      if (type === 'iframeSuccess') {
+        setIsLoading(false);
+        setError(null);
+      } else if (type === 'iframeError') {
+        const message = errorData?.message || 'Ein unbekannter Fehler ist im Artefakt aufgetreten.';
+        setError(message);
+        if (onError) onError(message);
         setIsLoading(false);
       }
     };
 
-    window.addEventListener('message', handleIframeError);
-    return () => window.removeEventListener('message', handleIframeError);
-  }, []);
+    window.addEventListener('message', handleIframeMessage);
+    return () => window.removeEventListener('message', handleIframeMessage);
+  }, [onError]);
 
-  // The iframe's onLoad event signifies the static HTML is ready.
-  // Babel will then transpile and run the React code.
-  const handleLoad = () => {
-    // We set a small timeout. If no error message arrives from the iframe
-    // after this time, we assume loading was successful. This handles cases
-    // where the component renders successfully without any explicit success message.
-    setTimeout(() => {
-        // Only turn off loading if no error has been set in the meantime.
-        if(!error) {
-            setIsLoading(false);
-        }
-    }, 200);
+  const refreshComponent = () => {
+    setIsLoading(true);
+    setError(null);
+    const [html, err] = createSandboxedHTML(reactCode);
+    if (err) {
+      setError(err);
+      setIsLoading(false);
+    } else {
+      // Force iframe reload by changing srcDoc
+      setSrcDoc('');
+      setTimeout(() => setSrcDoc(html), 20);
+    }
   };
 
-  const toggleFullscreen = () => setIsFullscreen(!isFullscreen);
-  const refreshComponent = () => generateAndSetSrcDoc();
-
   return (
-    <div
-      className={`bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden transition-all duration-300 flex flex-col ${ 
-        isFullscreen ? 'fixed inset-2 z-50 bg-slate-900' : 'relative h-[600px]'
-      }`}>
+    <div className={`bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden transition-all duration-300 flex flex-col h-full ${isFullscreen ? 'fixed inset-2 z-50 bg-slate-900' : 'relative'}`}>
       <div className="bg-slate-900/70 border-b border-slate-700 px-4 py-2 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
           <Play className="w-5 h-5 text-emerald-400" />
@@ -223,7 +192,7 @@ const ArtifactRenderer: FC<ArtifactRendererProps> = ({ reactCode, title = 'Inter
         <div className="flex items-center gap-1">
           <button onClick={refreshComponent} title="Refresh" className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-md"><RefreshCw className="w-4 h-4" /></button>
           <button onClick={() => setShowCode(!showCode)} title="View Code" className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-md"><Code className="w-4 h-4" /></button>
-          <button onClick={toggleFullscreen} title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-md">
+          <button onClick={() => setIsFullscreen(!isFullscreen)} title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-md">
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
         </div>
@@ -231,23 +200,24 @@ const ArtifactRenderer: FC<ArtifactRendererProps> = ({ reactCode, title = 'Inter
 
       {showCode && (
         <div className="bg-slate-900 p-4 border-b border-slate-700 flex-shrink-0 overflow-auto">
-          <h4 className="text-white font-semibold mb-2">Component Source Code</h4>
+          <h4 className="text-white font-semibold mb-2">Quellcode</h4>
           <pre className="bg-slate-950 rounded-md p-3 overflow-auto max-h-80 text-sm text-slate-300"><code>{reactCode}</code></pre>
         </div>
       )}
 
       <div className="relative w-full flex-grow bg-slate-900">
-        {(isLoading || error) && (
+        {isLoading && (
           <div className="absolute inset-0 bg-slate-800/80 flex items-center justify-center z-10 p-4">
-            {isLoading ? (
-              <div className="flex items-center gap-2 text-slate-300"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-400"></div>Loading Interactive Component...</div>
-            ) : (
+            <div className="flex items-center gap-2 text-slate-300"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-400"></div>Lade interaktive Komponente...</div>
+          </div>
+        )}
+        {error && (
+           <div className="absolute inset-0 bg-slate-800/80 flex items-center justify-center z-10 p-4">
               <div className="text-center text-red-400">
-                <h3 className="font-bold mb-1">Rendering Error</h3>
+                <h3 className="font-bold mb-1">Render-Fehler</h3>
                 <p className="text-sm text-slate-400">{error}</p>
               </div>
-            )}
-          </div>
+            </div>
         )}
         <iframe
           ref={iframeRef}
@@ -255,11 +225,9 @@ const ArtifactRenderer: FC<ArtifactRendererProps> = ({ reactCode, title = 'Inter
           sandbox="allow-scripts"
           title={`Interactive Artifact: ${title}`}
           srcDoc={srcDoc}
-          onLoad={handleLoad}
         />
       </div>
     </div>
   );
 };
-
 export default ArtifactRenderer;

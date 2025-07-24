@@ -152,7 +152,7 @@ def get_artifact(artifact_id):
                 'id': artifact.id,
                 'title': artifact.title,
                 'type': artifact.artifact_type,
-                'react_code': artifact.react_code,
+                'content': artifact.react_code,
                 'json_metadata': artifact.json_metadata,
                 'created_at': artifact.created_at.isoformat(),
                 'updated_at': artifact.updated_at.isoformat()
