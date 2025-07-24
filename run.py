@@ -9,6 +9,6 @@ from backend import create_app
 
 app = create_app()
 
-if __name__ == '__main__':
-    # The host must be set to 0.0.0.0 to be accessible from outside the container
-    app.run(host='0.0.0.0', port=5001, debug=True)
+if __name__ == "__main__":
+    # This port is for local development; Gunicorn will use the port from the Dockerfile in production.
+    app.run(host="0.0.0.0", port=5001, debug=True)
