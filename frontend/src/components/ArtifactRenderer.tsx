@@ -1,23 +1,12 @@
 import React, { useState, useEffect, useRef, FC } from 'react';
 
-// --- HELPER ICONS ---
-const Play: FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-);
-const RefreshCw: FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M3 2v6h6"></path><path d="M21 12A9 9 0 0 0 6 5.3L3 8"></path><path d="M21 22v-6h-6"></path><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"></path></svg>
-);
-const Code: FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
-);
-const Maximize2: FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
-);
-const Minimize2: FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="10" y1="14" x2="3" y2="21"></line></svg>
-);
+// --- Icons ---
+const Play: FC<React.SVGProps<SVGSVGElement>> = (props) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>);
+const RefreshCw: FC<React.SVGProps<SVGSVGElement>> = (props) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M3 2v6h6"></path><path d="M21 12A9 9 0 0 0 6 5.3L3 8"></path><path d="M21 22v-6h-6"></path><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"></path></svg>);
+const Code: FC<React.SVGProps<SVGSVGElement>> = (props) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>);
+const Maximize2: FC<React.SVGProps<SVGSVGElement>> = (props) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>);
+const Minimize2: FC<React.SVGProps<SVGSVGElement>> = (props) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="10" y1="14" x2="3" y2="21"></line></svg>);
 
-// --- ARTIFACT RENDERER COMPONENT ---
 interface ArtifactRendererProps {
   reactCode: string;
   title?: string;
@@ -25,81 +14,41 @@ interface ArtifactRendererProps {
   onError?: (message: string) => void;
 }
 
-/**
- * Creates the full HTML content for the sandboxed iframe.
- * @param code The raw React component code.
- * @returns A tuple containing the HTML string and a potential error message.
- */
 const createSandboxedHTML = (code: string): [string, string | null] => {
-  if (!code) {
-    return ['', 'Artefakt-Inhalt ist leer oder ungültig. Das Artefakt kann nicht gerendert werden.'];
-  }
-  // Sanitize and clean the user-provided code
-  const sanitizedCode = code.replace(/\u00A0/g, ' '); // Replace non-breaking spaces
-  const baseCleanedCode = sanitizedCode
-    .replace(/import\s+.*\s+from\s+['"].*['"];?/g, '') // Remove import statements
-    .replace(/export\s+/g, ''); // Remove 'export' but keep 'default' for parsing
-
+  let cleanedCode = code.replace(/import\s+.*\s+from\s+['"].*['"];?/g, '');
   let componentName: string | null = null;
-  let finalCleanedCode = baseCleanedCode;
 
-  // --- NEW Resilient Component Discovery Logic ---
-  const findComponent = () => {
-      // 1. Look for `export default function ComponentName` or `export default class ComponentName`
-      let match = baseCleanedCode.match(/default\s+(?:function|class)\s+([A-Z]\w*)/);
-      if (match) {
-          finalCleanedCode = baseCleanedCode.replace('default', '');
-          return match[1];
-      }
-
-      // 2. Look for `export default ComponentName;`
-      match = baseCleanedCode.match(/default\s+([A-Z]\w*);?/);
-      if (match) {
-          finalCleanedCode = baseCleanedCode.replace(/default\s+[A-Z]\w*;?/g, '');
-          return match[1];
-      }
-      
-      // 3. Fallback: Find the *last* capitalized component defined in the file.
-      const allComponents = [...baseCleanedCode.matchAll(/(?:const|function)\s+([A-Z]\w*)/g)];
-      if (allComponents.length > 0) {
-          return allComponents[allComponents.length - 1][1];
-      }
-
-      return null;
-  };
-
-  componentName = findComponent();
+  const exportDefaultMatch = cleanedCode.match(/export\s+default\s+(?:function\s+|class\s+)?([A-Z]\w*)/);
+  if (exportDefaultMatch && exportDefaultMatch[1]) {
+    componentName = exportDefaultMatch[1];
+  } else {
+    const allComponents = [...cleanedCode.matchAll(/(?:const|function)\s+([A-Z]\w*)/g)];
+    if (allComponents.length > 0) {
+      componentName = allComponents[allComponents.length - 1][1];
+    }
+  }
 
   if (!componentName) {
-    return ['', 'Could not find a main React component. Ensure it is a capitalized function or const, and preferably exported as default.'];
+    return ['', 'Konnte keine React-Hauptkomponente finden.'];
   }
-  
-  // Final cleanup of the 'default' keyword if it exists anywhere else
 
-  // An Error Boundary component to catch rendering errors within the sandboxed React tree.
-  const errorBoundaryClass = `
-    class ErrorBoundary extends React.Component {
-      constructor(props) { super(props); this.state = { hasError: false, error: null }; }
-      static getDerivedStateFromError(error) { return { hasError: true, error }; }
-      componentDidCatch(error, errorInfo) { window.parent.postMessage({ type: 'iframeError', error: { message: error.message, stack: errorInfo.componentStack } }, '*'); }
-      render() {
-        if (this.state.hasError) { return null; }
-        return this.props.children;
-      }
-    }
+  cleanedCode = cleanedCode.replace(/export\s+default/g, '').replace(/export\s/g, '');
+
+  const fullComponentCode = `
+    const { useState, useEffect, useReducer, useCallback, useMemo, useRef, useContext } = React;
+    ${cleanedCode}
+    const ComponentToRender = ${componentName};
+    const container = document.getElementById('root');
+    const root = ReactDOM.createRoot(container);
+    root.render(React.createElement(ComponentToRender));
   `;
 
   const script = `
     try {
-      const { useState, useEffect, useReducer, useCallback, useMemo, useRef, useContext } = React;
-      ${errorBoundaryClass}
-      ${finalCleanedCode}
-      
-      const ComponentToRender = eval(${JSON.stringify(componentName)});
-      const container = document.getElementById('root');
-      const root = ReactDOM.createRoot(container);
-      root.render(React.createElement(ErrorBoundary, null, React.createElement(ComponentToRender)));
-      
+      const transformedCode = Babel.transform(${JSON.stringify(fullComponentCode)}, { presets: ['react'] }).code;
+      const scriptEl = document.createElement('script');
+      scriptEl.textContent = transformedCode;
+      document.body.appendChild(scriptEl);
       window.parent.postMessage({ type: 'iframeSuccess' }, '*');
     } catch (e) {
       window.parent.postMessage({ type: 'iframeError', error: { message: e.message, stack: e.stack } }, '*');
@@ -115,11 +64,25 @@ const createSandboxedHTML = (code: string): [string, string | null] => {
         <script src="https://cdn.tailwindcss.com"></script>
         <style>body { margin: 0; background-color: transparent; color: #e2e8f0; font-family: sans-serif; }</style>
         <script>
-          window.addEventListener('error', e => { window.parent.postMessage({ type: 'iframeError', error: { message: e.error.message, stack: e.error.stack } }, '*'); });
-          window.addEventListener('unhandledrejection', e => { window.parent.postMessage({ type: 'iframeError', error: { message: e.reason.message, stack: e.reason.stack } }, '*'); });
+          // Globale Error-Handler, die JEDEN Fehler fangen
+          window.addEventListener('error', e => {
+            const error = e.error || {};
+            window.parent.postMessage({ type: 'iframeError', error: { message: error.message || 'Script error', stack: error.stack } }, '*'); 
+          });
+          window.addEventListener('unhandledrejection', e => { 
+            const reason = e.reason || {};
+            window.parent.postMessage({ type: 'iframeError', error: { message: reason.message || 'Unhandled rejection', stack: reason.stack } }, '*');
+          });
         </script>
       </head>
-      <body><div id="root"></div><script type="text/babel">${script}</script></body>
+      <body>
+        <div id="root"></div>
+        <script>
+          // Pass the code to be transformed into a global variable
+          window.fullComponentCode = ${JSON.stringify(fullComponentCode)};
+        </script>
+        <script>${script}</script>
+      </body>
     </html>
   `, null];
 };
@@ -131,6 +94,7 @@ const ArtifactRenderer: FC<ArtifactRendererProps> = ({ reactCode, title = 'Artif
   const [error, setError] = useState<string | null>(null);
   const [showCode, setShowCode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [key, setKey] = useState(0); // State to force iframe re-creation
 
   useEffect(() => {
     setIsLoading(true);
@@ -143,11 +107,12 @@ const ArtifactRenderer: FC<ArtifactRendererProps> = ({ reactCode, title = 'Artif
     } else {
       setSrcDoc(htmlContent);
     }
-  }, [reactCode]);
+  }, [reactCode, key]); // Re-run when key changes
 
   useEffect(() => {
     const handleIframeMessage = (event: MessageEvent) => {
-      if (event.source !== iframeRef.current?.contentWindow) return;
+      // Sicherheitscheck: Stellen Sie sicher, dass die Nachricht vom iframe stammt, den wir erwarten.
+      if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) return;
       
       const { type, error: errorData } = event.data;
       if (type === 'iframeSuccess') {
@@ -166,17 +131,8 @@ const ArtifactRenderer: FC<ArtifactRendererProps> = ({ reactCode, title = 'Artif
   }, [onError]);
 
   const refreshComponent = () => {
-    setIsLoading(true);
-    setError(null);
-    const [html, err] = createSandboxedHTML(reactCode);
-    if (err) {
-      setError(err);
-      setIsLoading(false);
-    } else {
-      // Force iframe reload by changing srcDoc
-      setSrcDoc('');
-      setTimeout(() => setSrcDoc(html), 20);
-    }
+    // Ändern Sie den Key, um eine vollständige Neuerstellung zu erzwingen
+    setKey(prevKey => prevKey + 1);
   };
 
   return (
@@ -220,9 +176,10 @@ const ArtifactRenderer: FC<ArtifactRendererProps> = ({ reactCode, title = 'Artif
             </div>
         )}
         <iframe
+          key={key} // Wichtig: Erzwingt die Neuerstellung des iframes beim Refresh
           ref={iframeRef}
           className={`w-full h-full border-0 ${isLoading || error ? 'opacity-0' : 'opacity-100'} transition-opacity`}
-          sandbox="allow-scripts"
+          sandbox="allow-scripts allow-same-origin" // allow-same-origin ist für die message-Kommunikation notwendig
           title={`Interactive Artifact: ${title}`}
           srcDoc={srcDoc}
         />
@@ -230,4 +187,5 @@ const ArtifactRenderer: FC<ArtifactRendererProps> = ({ reactCode, title = 'Artif
     </div>
   );
 };
+
 export default ArtifactRenderer;
