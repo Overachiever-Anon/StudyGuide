@@ -18,6 +18,7 @@ class PDF(db.Model):
     filename = db.Column(db.String(255), nullable=False)
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text, nullable=False)
+    storage_path = db.Column(db.String(500), nullable=True)  # Path to the file in Supabase storage
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     user = db.relationship('User', backref=db.backref('pdfs', lazy=True))

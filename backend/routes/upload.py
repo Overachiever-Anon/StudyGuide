@@ -1,10 +1,12 @@
 from flask import Blueprint, request, jsonify
 from werkzeug.utils import secure_filename
 import fitz  # PyMuPDF
+import io
 
 from ..extensions import db
 from ..utils.decorators import jwt_required
 from ..utils.chapter_splitter import split_into_chapters
+from ..services.storage import SupabaseStorage
 
 # Define the blueprint
 upload_bp = Blueprint('upload_bp', __name__, url_prefix='/api')
@@ -35,8 +37,12 @@ def upload_file(current_user):
             # Read file stream into memory
             file_stream = file.read()
             
+            # Upload to Supabase storage
+            storage = SupabaseStorage()
+            file_path = storage.upload_file(file_stream, filename, current_user.id)
+            
             # Open PDF with PyMuPDF from memory
-            pdf_document = fitz.open(stream=file_stream, filetype="pdf")
+            pdf_document = fitz.open(stream=io.BytesIO(file_stream), filetype="pdf")
             
             # Extract text from all pages
             content = ""
@@ -51,7 +57,8 @@ def upload_file(current_user):
                 filename=filename,
                 title=filename.rsplit('.', 1)[0],  # Use filename without extension as title
                 content=content,
-                user_id=current_user.id
+                user_id=current_user.id,
+                storage_path=file_path
             )
             
             db.session.add(new_pdf)

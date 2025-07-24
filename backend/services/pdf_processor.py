@@ -7,7 +7,9 @@ import fitz  # PyMuPDF
 import pdfplumber
 from typing import Dict, List, Tuple
 import re
+import tempfile
 from .ai_artifact_generator import AIArtifactGenerator
+from .storage import SupabaseStorage
 
 class PDFProcessor:
     """Process PDF files and extract content for AI analysis"""
@@ -20,8 +22,23 @@ class PDFProcessor:
         """Extract text content from PDF file"""
         
         text_content = ""
+        temp_file = None
         
         try:
+            # Check if path is a storage reference (user_id/filename)
+            if not os.path.exists(pdf_path) and '/' in pdf_path:
+                # It's likely a Supabase storage path - download to temp file
+                storage = SupabaseStorage()
+                pdf_data = storage.download_file(pdf_path)
+                
+                # Create a temporary file
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+                temp_file.write(pdf_data)
+                temp_file.close()
+                
+                # Use the temp file path instead
+                pdf_path = temp_file.name
+            
             # Try with pdfplumber first (better for structured text)
             with pdfplumber.open(pdf_path) as pdf:
                 for page in pdf.pages:
@@ -41,6 +58,10 @@ class PDFProcessor:
         except Exception as e:
             print(f"Error extracting text from PDF: {e}")
             return ""
+        finally:
+            # Clean up temp file if it exists
+            if temp_file and os.path.exists(temp_file.name):
+                os.unlink(temp_file.name)
         
         return text_content.strip()
     
