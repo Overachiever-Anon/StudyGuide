@@ -21,3 +21,5 @@ EXPOSE 7860
 # Change to the backend directory and run gunicorn
 # Run the application using run.py
 CMD ["python", "backend/run.py"]
+
+# Add this line to force a redeploy
