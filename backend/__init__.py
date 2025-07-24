@@ -1,24 +1,40 @@
 import os
 from flask import Flask, jsonify
 from flask_cors import CORS
+from dotenv import load_dotenv
 
 def create_app():
+    """Creates and configures the Flask application."""
+    load_dotenv()
+
     app = Flask(__name__)
 
-    # Enable CORS
-    CORS(app, resources={r"/api/*": {"origins": os.environ.get('FRONTEND_URL')}}, supports_credentials=True)
-
-    # App Configuration
+    # --- App Configuration ---
     app.config['SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY')
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-    # Initialize extensions within the app factory
-    from .extensions import db, bcrypt
+    # --- Validation ---
+    if not app.config['SECRET_KEY']:
+        raise ValueError("A JWT_SECRET_KEY is required.")
+    if not app.config['SQLALCHEMY_DATABASE_URI']:
+        raise ValueError("A DATABASE_URL is required.")
+
+    # --- CORS Configuration ---
+    frontend_url = os.environ.get('FRONTEND_URL')
+    if frontend_url:
+        CORS(app, resources={r"/api/*": {"origins": frontend_url}}, supports_credentials=True)
+    else:
+        CORS(app, supports_credentials=True) # Fallback for local development
+
+    # --- Initialize Extensions ---
+    from .extensions import db, bcrypt, migrate, init_supabase
     db.init_app(app)
     bcrypt.init_app(app)
+    migrate.init_app(app, db) # For database migrations
+    init_supabase() # For Supabase file storage
 
-    # Register Blueprints
+    # --- Register Blueprints ---
     from .routes.auth import auth_bp
     from .routes.upload import upload_bp
     from .routes.lectures import lectures_bp
@@ -33,7 +49,7 @@ def create_app():
     app.register_blueprint(ai_bp, url_prefix='/api/ai')
     app.register_blueprint(artifacts_bp, url_prefix='/api/artifacts')
 
-    # Register CLI commands
+    # --- Register CLI Commands ---
     from .cli import register_cli_commands
     register_cli_commands(app)
 
