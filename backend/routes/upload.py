@@ -1,84 +1,73 @@
 from flask import Blueprint, request, jsonify
+from ..models import db, Lecture
+from ..utils.decorators import login_required
+import os
+from ..extensions import supabase
 from werkzeug.utils import secure_filename
-import fitz  # PyMuPDF
-import io
+import time
+from supabase.lib.client_options import ClientOptions
 
-from ..extensions import db
-from ..utils.decorators import jwt_required
-from ..utils.chapter_splitter import split_into_chapters
-from ..services.storage import SupabaseStorage
+bp = Blueprint('upload', __name__, url_prefix='/api/upload')
 
-# Define the blueprint
-upload_bp = Blueprint('upload_bp', __name__, url_prefix='/api')
-
-ALLOWED_EXTENSIONS = {'pdf'}
-
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-@upload_bp.route('/upload', methods=['POST'])
-@jwt_required
+@bp.route('', methods=['POST'])
+@login_required
 def upload_file(current_user):
-    from ..models import PDF, Chapter  # Defer import
-    
     if 'file' not in request.files:
-        return jsonify({'message': 'No file part in the request'}), 400
+        return jsonify({'error': 'No file part'}), 400
     
     file = request.files['file']
-
     if file.filename == '':
-        return jsonify({'message': 'No selected file'}), 400
+        return jsonify({'error': 'No selected file'}), 400
 
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        
+    if file and file.filename.endswith('.pdf'):
         try:
-            # Read file stream into memory
-            file_stream = file.read()
+            filename = secure_filename(file.filename)
+            # Create a unique path for the file to prevent overwrites
+            file_path_in_bucket = f"{current_user.id}/{int(time.time())}-{filename}"
             
-            # Upload to Supabase storage
-            storage = SupabaseStorage()
-            file_path = storage.upload_file(file_stream, filename, current_user.id)
-            
-            # Open PDF with PyMuPDF from memory
-            pdf_document = fitz.open(stream=io.BytesIO(file_stream), filetype="pdf")
-            
-            # Extract text from all pages
-            content = ""
-            for page_num in range(len(pdf_document)):
-                page = pdf_document.load_page(page_num)
-                content += page.get_text()
-            
-            pdf_document.close()
-            
-            # Create a new PDF record in the database
-            new_pdf = PDF(
-                filename=filename,
-                title=filename.rsplit('.', 1)[0],  # Use filename without extension as title
-                content=content,
-                user_id=current_user.id,
-                storage_path=file_path
-            )
-            
-            db.session.add(new_pdf)
-            db.session.flush()  # Flush to get the new_pdf.id before committing
+            bucket_name = os.environ.get("SUPABASE_BUCKET_NAME")
+            if not bucket_name:
+                 return jsonify({'error': 'Supabase bucket name not configured'}), 500
 
-            # Split content into chapters and save them
-            chapters = split_into_chapters(content)
-            for chapter_title, chapter_content in chapters:
-                new_chapter = Chapter(
-                    title=chapter_title,
-                    content=chapter_content,
-                    pdf_id=new_pdf.id
+            # --- UPDATED SECTION ---
+            # Check if the bucket exists. If not, create it.
+            # The new way to make a bucket public is with FileOptions.
+            try:
+                supabase.storage.get_bucket(bucket_name)
+            except Exception:
+                # If get_bucket fails, it likely doesn't exist. Let's create it.
+                supabase.storage.create_bucket(
+                    name=bucket_name,
+                    options=ClientOptions(public=True) # Correct way to make a bucket public
                 )
-                db.session.add(new_chapter)
-            
+            # --- END UPDATED SECTION ---
+
+            # Upload to Supabase Storage
+            file_content = file.read()
+            file.seek(0) # Reset file pointer after reading
+
+            supabase.storage.from_(bucket_name).upload(
+                path=file_path_in_bucket,
+                file=file_content,
+                file_options={"content-type": "application/pdf"}
+            )
+
+            # Create a new lecture record in the database
+            new_lecture = Lecture(
+                user_id=current_user.id,
+                title=filename,
+                file_path=file_path_in_bucket
+            )
+            db.session.add(new_lecture)
             db.session.commit()
-            
-            return jsonify({'message': 'File uploaded and processed successfully', 'pdf_id': new_pdf.id}), 201
+
+            return jsonify({
+                'id': new_lecture.id,
+                'title': new_lecture.title,
+                'file_path': new_lecture.file_path
+            }), 201
 
         except Exception as e:
-            return jsonify({'message': f'An error occurred: {str(e)}'}), 500
-    else:
-        return jsonify({'message': 'File type not allowed'}), 400
+            return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+
+    return jsonify({'error': 'Invalid file type, only PDF is allowed'}), 400
